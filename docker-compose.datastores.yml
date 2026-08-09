@@ -1,0 +1,89 @@
+# Datastores only: PostgreSQL, Redis and Meilisearch.
+#
+# One of three topologies in this repository. Use this one when you are working on
+# an application rather than deploying it — it starts what the applications talk to
+# and nothing else, so you can run the API from an IDE or from Maven and restart it
+# as often as you like without waiting for a container build.
+#
+#   docker-compose.yml             everything, built from source. The deployment.
+#   docker-compose.datastores.yml  this file. Datastores only, for development.
+#   docker-compose.remote.yml      prebuilt images against datastores already running.
+#
+# The applications are deliberately absent. Run the API with
+# `mvn spring-boot:run -Pdev` (which activates application-dev.yml and points at
+# exactly these services) or `make dev` from documan-java21, and the client with
+# `npm start` from documan-angular-21.
+#
+#   docker compose -f docker-compose.datastores.yml up -d
+#   docker compose -f docker-compose.datastores.yml ps     # health of each service
+#   docker compose -f docker-compose.datastores.yml down
+#
+# Volumes are bind mounts under ./persist, which is gitignored. This file used to
+# live in documan-java21, so if you already have data it is at
+# documan-java21/persist — `mv documan-java21/persist persist` brings it with you,
+# otherwise these start empty and you will want the seed step from the README.
+#
+# Ports are published on all interfaces here because a process on the host has to
+# reach them. That is fine on a laptop and wrong on a server: see
+# docker-compose.remote.yml, which binds to loopback.
+#
+# Credentials here are development defaults and are intentionally checked in. They match
+# application-dev.yml; change one and you must change the other.
+name: documan-dev
+
+services:
+  postgres:
+    image: postgres:17.0-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      # Stated explicitly: the application connects to a database called `postgres`, and relying on
+      # the image's default (which names it after POSTGRES_USER) makes that look accidental.
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./persist/database/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tty: true
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: redis
+    command: redis-server --requirepass password
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./persist/redis:/data:rw
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a password --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    stdin_open: true
+    tty: true
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.52
+    container_name: meilisearch
+    environment:
+      MEILI_MASTER_KEY: masterKey
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./persist/meili:/meili_data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7700/health | grep -q available"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

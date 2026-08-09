@@ -1,0 +1,94 @@
+# Deploying to a server: prebuilt images, datastores already running, nothing
+# published to the internet.
+#
+# This is the file that runs the real deployment, kept here rather than only on the
+# server so the way it is deployed is reviewable. One of three topologies:
+#
+#   docker-compose.yml             everything, built from source. Start here locally.
+#   docker-compose.datastores.yml  datastores only, for working on an application.
+#   docker-compose.remote.yml      this file.
+#
+# The differences from docker-compose.yml are all consequences of being on a small
+# server rather than a laptop:
+#
+#   - It builds nothing. Images come from a registry, so a deploy is a pull and a
+#     recreate rather than a compile. A 2 vCPU box should not be building Angular.
+#   - It joins datastores that already exist instead of starting its own. Bringing
+#     up a second PostgreSQL beside the first is how you end up with two databases
+#     and no idea which one has the data.
+#   - It binds to loopback. The host's nginx terminates TLS and proxies inward;
+#     nothing here is reachable from outside the machine.
+#   - It sets memory limits, because the JVM will otherwise size its heap against
+#     the host's total memory and get killed by the kernel on a 1 GB box.
+#
+#   docker compose -f docker-compose.remote.yml pull
+#   docker compose -f docker-compose.remote.yml up -d
+#
+# Needs the same .env as docker-compose.yml, minus the build-time values: the
+# publishable key is already compiled into the web image.
+
+name: documan
+
+networks:
+  default:
+    # The datastores are expected to be up already, under this network, from
+    # docker-compose.datastores.yml. `external: true` means compose will refuse to
+    # start rather than silently creating an empty network with no databases on it.
+    #
+    # The name is the datastore compose project's network. If you renamed that
+    # project, rename this to match.
+    name: documan-dev_default
+    external: true
+
+services:
+  api:
+    image: ${IMAGE_REPO:-theinhumaneme/images}:${API_TAG:?set API_TAG in .env}
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+
+      # Service names on the shared network, not localhost: these resolve to the
+      # datastore containers.
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-postgres}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MEILI_HOST: http://meilisearch:7700
+
+      # A pre-sized heap and an explicit collector were both tried here and both
+      # measured worse on a memory-tight host — committing the heap up front pushed
+      # 146 MB of the JVM into swap and turned collection into disk I/O. What is
+      # left is the one flag that helps: track the container limit rather than the
+      # host's total memory.
+      #
+      # The image's default JAVA_OPTS also loads the OpenTelemetry agent. Dropped
+      # here: it costs memory to export traces to a collector that is not running.
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=65
+    ports:
+      # Loopback only. A stable address for the host's nginx, unlike the container
+      # IP, which changes on every recreate.
+      - "127.0.0.1:${API_PORT:-8082}:8080"
+    mem_limit: ${API_MEM:-448m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      # Generous because startup on a small, oversubscribed host is slow — minutes,
+      # not seconds, and the container is killed and retried if this is too tight.
+      start_period: 90s
+    restart: unless-stopped
+
+  web:
+    image: ${IMAGE_REPO:-theinhumaneme/images}:${WEB_TAG:?set WEB_TAG in .env}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8081}:80"
+    mem_limit: ${WEB_MEM:-64m}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped

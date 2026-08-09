@@ -1,0 +1,57 @@
+# The outer repository. Both applications carry their own .gitignore; this one
+# covers what sits between them.
+
+# Deployment configuration. Holds the database password, the Redis password, the
+# Meilisearch key and the R2 secret — everything .env.example deliberately does
+# not. .env.example is the file that gets committed.
+.env
+.env.*
+!.env.example
+
+# Drive exports. Around 13 GB of them, checked into nothing and belonging in
+# nothing; without this line a stray `git add .` tries to commit the lot.
+drive-download-*/
+
+# Private keys. `oracle-cloud.key` is the SSH key to the deployment host and was
+# sitting here unignored — one `git add .` from being published, which for a key
+# means rotating it on the server rather than deleting a commit. The patterns are
+# deliberately broader than that one file: the next key someone drops in here
+# should be ignored before anybody has to remember to think about it.
+#
+# Better still, keep it in ~/.ssh and point at it with `ssh -i`. A key that is
+# not in the working tree cannot be committed by accident.
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+logs/
+
+# Bind-mounted datastore files from docker-compose.datastores.yml. Live PostgreSQL,
+# Redis and Meilisearch data — 70 MB and upward after any real use, and meaningless
+# outside the container that wrote it. This line arrived with the compose file; it
+# was previously ignored inside the submodule and would otherwise have been
+# committable the moment the file moved up here.
+persist/
+
+# Assistant tooling that happens to live in the working tree. `.agents` alone is
+# 650 files and 14 MB — around 88% of everything a `git add .` would stage, none
+# of it Documan. A reader cloning this repository wants two applications and a
+# compose file, not somebody's editor and agent configuration.
+#
+# `.claude` and `.vscode` are left tracked deliberately: `.claude/launch.json`
+# describes how to start the dev servers, which is genuinely about this project.
+.agents/
+.superpowers/
+docs/superpowers/
+skills-lock.json
+
+# Build output and dependencies, in case either submodule is ever flattened into
+# this repository rather than referenced.
+node_modules/
+dist/
+target/
+
+.DS_Store

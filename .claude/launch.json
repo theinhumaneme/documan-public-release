@@ -1,0 +1,43 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "documan-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "documan-angular-21", "start", "--", "--port", "4310"],
+      "port": 4310,
+      "autoPort": false
+    },
+    {
+      "name": "documan-web-4321",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "documan-angular-21", "start", "--", "--port", "4321"],
+      "port": 4321,
+      "autoPort": false
+    },
+    {
+      "name": "documan-web-4322",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "documan-angular-21", "start", "--", "--port", "4322"],
+      "port": 4322,
+      "autoPort": false
+    },
+    {
+      "name": "documan-web-4200",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "documan-angular-21", "start", "--", "--port", "4200"],
+      "port": 4200,
+      "autoPort": false
+    },
+    {
+      "name": "documan-api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd documan-java21 && JAVA_HOME=/opt/homebrew/opt/openjdk@25 DB_HOST=127.0.0.1 REDIS_HOST=127.0.0.1 MEILI_HOST=http://127.0.0.1:7700 exec mvn spring-boot:run -Pdev"
+      ],
+      "port": 8080,
+      "autoPort": false
+    }
+  ]
+}
